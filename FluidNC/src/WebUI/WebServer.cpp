@@ -377,6 +377,22 @@ namespace WebUI {
             return;
         }
 
+        // Allow other HTML pages to be viewed without being downloaded
+        std::string htmlsuffix = ".html";
+        std::string htmsuffix = ".htm";
+        std::string htmlgzsuffix = ".html.gz";
+        std::string htmgzsuffix = ".htm.gz";
+        if (
+            ( path.rfind(htmlsuffix) == path.length() - htmlsuffix.length() ) ||
+            ( path.rfind(htmsuffix) == path.length() - htmsuffix.length() ) ||
+            ( path.rfind(htmlgzsuffix) == path.length() - htmlgzsuffix.length() ) ||
+            ( path.rfind(htmgzsuffix) == path.length() - htmgzsuffix.length() )
+        ) {
+            if (myStreamFile(path.c_str())) {
+                return;
+            }
+        }
+
         // Download a file.  The true forces a download instead of displaying the file
         if (myStreamFile(path.c_str(), true)) {
             return;
