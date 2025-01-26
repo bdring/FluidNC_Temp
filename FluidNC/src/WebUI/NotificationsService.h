@@ -15,7 +15,7 @@ namespace WebUI {
             _started          = false;
             _notificationType = 0;
             _token1           = "";
-            _token1           = "";
+            _token2           = "";
             _settings         = "";
         }
 
