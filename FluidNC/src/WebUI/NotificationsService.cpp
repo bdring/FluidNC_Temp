@@ -24,6 +24,7 @@ namespace WebUI {
     static const int PUSHOVER_NOTIFICATION = 1;
     static const int EMAIL_NOTIFICATION    = 2;
     static const int LINE_NOTIFICATION     = 3;
+    static const int TELEGRAM_NOTIFICATION = 4;
 
     static const int DEFAULT_NOTIFICATION_TYPE       = 0;
     static const int MIN_NOTIFICATION_TOKEN_LENGTH   = 0;
@@ -40,6 +41,10 @@ namespace WebUI {
     static const char* LINESERVER  = "notify-api.line.me";
     static const int   LINEPORT    = 443;
 
+    static const int   TELEGRAMTIMEOUT = 5000;
+    static const char* TELEGRAMSERVER  = "api.telegram.org";
+    static const int   TELEGRAMPORT    = 443;
+
     static const int EMAILTIMEOUT = 5000;
 
     bool        NotificationsService::_started = false;
@@ -55,6 +60,7 @@ namespace WebUI {
         { "LINE", 3 },
         { "PUSHOVER", 1 },
         { "EMAIL", 2 },
+        { "TG", 4 },
     };
     EnumSetting*   notification_type;
     StringSetting* notification_t1;
@@ -156,6 +162,8 @@ namespace WebUI {
                 return "Email";
             case LINE_NOTIFICATION:
                 return "Line";
+            case TELEGRAM_NOTIFICATION:
+                return "TG";
             default:
                 return "None";
         }
@@ -175,6 +183,9 @@ namespace WebUI {
                     break;
                 case LINE_NOTIFICATION:
                     return sendLineMSG(title, message);
+                    break;
+                case TELEGRAM_NOTIFICATION:
+                    return sendTelegramMSG(title, message);
                     break;
                 default:
                     break;
@@ -320,6 +331,64 @@ namespace WebUI {
         Notificationclient.stop();
         return res;
     }
+    /// @brief Send notification message to telegram chat. 
+    /// @param title message title
+    /// @param message message content
+    /// @return true on success
+    /// @attention `$Notification/Type` should be "TG".
+    /// @attention `$Notification/T1` should be Telegram bot token. See notes.
+    /// @attention `$Notification/T2` should be Telegram chat id, e.g. `1234567890` or `-1234567890`. See notes.
+    /// @note * Obtaining bot token: Register bot with [@BotFather](https://t.me/BotFather), 
+    ///   and get bot token, e.g. `1234567890:ABCdefGHi-JKLmNOpQR-stuvw-xyz012345`.
+    /// @note * Obtaining chat id for personal account: If you want to get notifications to your personal chat, 
+    ///   text `/start` to the bot, 
+    /// open `https://api.telegram.org/bot{bot-token}/getUpdates` in browser and get `..."chat":{"id":1234567890` here. 
+    /// @note * Obtaining chat id for group chat: If you want to get notifications to group chat, invite bot to group, 
+    ///   text to group chat `/nameOfYour_bot hello`, 
+    /// open `https://api.telegram.org/bot{bot-token}/getUpdates` in browser and get `..."chat":{"id":-1234567890` here. 
+    /// Note, group chat id is negative.
+    bool NotificationsService::sendTelegramMSG(const char* title, const char* message) {
+        WiFiClientSecure Notificationclient;
+        Notificationclient.setInsecure(); //! Can not verify TLS certificates, as we don't load them into FW.
+        if (!Notificationclient.connect(_serveraddress.c_str(), _port)) {
+            return false;
+        }
+        /** POST data explained
+         *    POST /bot{T1}/sendMessage HTTP/1.1{CRLF}
+         *    Host: {_serveraddress}{CRLF}
+         *    Content-Type: application/json{CRLF}
+         *    Content-Length: {len(payload)}{CRLF}
+         *    {CRLF}
+         *    {payload}{CRLF}
+         *
+         * Payload explained:
+         *    {
+         *      "parse_mode":"HTML",
+         *      "chat_id":"{T2}",
+         *      "text":"<b>{title}</b>{LF}{LF}{message}"
+         *    }
+         */
+
+        //! WARNING:
+        //  To save few bytes in flash memory, this code is so ugly.
+        //  Length of line marked as TG_PAYLOAD_LINE is precalculated as if all 
+        //    placeholders were zero-length and added to overall length on line 
+        //    marked as TG_PAYLOAD_LINE_LEN
+        Notificationclient.printf(
+            "POST /bot%s/sendMessage HTTP/1.1\r\n"
+            "Host:%s\r\n"
+            "Content-Type:application/json\r\n"
+            "Content-Length:%d\r\n"
+            "\r\n"
+            "{\"parse_mode\":\"HTML\",\"chat_id\":\"%s\",\"text\":\"<b>%s</b>\n\n%s\"}" // TG_PAYLOAD_LINE
+            "\r\n",
+            _token1.c_str(),
+            _serveraddress.c_str(),
+            _token2.length() + strlen(title) + strlen(message) +
+            55, // TG_PAYLOAD_LINE_LEN
+            _token2.c_str(), title, message);
+        return Wait4Answer(Notificationclient, "{", "\"ok\":true", TELEGRAMTIMEOUT);
+    }
     //Email#serveraddress:port
     bool NotificationsService::getPortFromSettings() {
         std::string tmp(notification_ts->get());
@@ -399,6 +468,12 @@ namespace WebUI {
                 _token1        = notification_t1->get();
                 _port          = LINEPORT;
                 _serveraddress = LINESERVER;
+                break;
+            case TELEGRAM_NOTIFICATION:
+                _token1        = notification_t1->get();
+                _token2        = notification_t2->get();
+                _port          = TELEGRAMPORT;
+                _serveraddress = TELEGRAMSERVER;
                 break;
             case EMAIL_NOTIFICATION:
                 _token1 = base64::encode(notification_t1->get()).c_str();

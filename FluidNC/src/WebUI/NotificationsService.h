@@ -41,6 +41,7 @@ namespace WebUI {
         static bool  sendPushoverMSG(const char* title, const char* message);
         static bool  sendEmailMSG(const char* title, const char* message);
         static bool  sendLineMSG(const char* title, const char* message);
+        static bool  sendTelegramMSG(const char* title, const char* message);
         static bool  getPortFromSettings();
         static bool  getServerAddressFromSettings();
         static bool  getEmailFromSettings();
