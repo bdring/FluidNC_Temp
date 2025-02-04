@@ -197,7 +197,7 @@ static void show_settings(Channel& out, type_t type) {
             show_setting(s->getGrblName(), s->getCompatibleValue(), NULL, out);
         }
     }
-   // Print Report/Inches
+    // Print Report/Inches
     switchInchMM(NULL, AuthenticationLevel::LEVEL_ADMIN, out);
 
     // need this per issue #1036
@@ -727,7 +727,7 @@ static Error switchInchMM(const char* value, AuthenticationLevel auth_level, Cha
     if (!value) {
         log_stream(out, "$13=" << (config->_reportInches ? "1" : "0"));
     } else {
-        config->_reportInches = ((value[0]=='1') ? true : false);
+        config->_reportInches = ((value[0] == '1') ? true : false);
     }
 
     return Error::Ok;
@@ -759,6 +759,98 @@ static Error showStartupLog(const char* value, AuthenticationLevel auth_level, C
 
 static Error showGPIOs(const char* value, AuthenticationLevel auth_level, Channel& out) {
     gpio_dump(out);
+    return Error::Ok;
+}
+
+#include "UartTypes.h"
+
+static Error uartPassthrough(const char* value, AuthenticationLevel auth_level, Channel& out) {
+    Uart* downstream_uart = nullptr;
+    int   uart_num;
+    if (!value) {
+        value = "auto";
+    }
+    if (strcasecmp(value, "auto") == 0) {
+        // Find a UART device with a non-empty passthrough_baud config item
+        for (uart_num = 1; uart_num < MAX_N_UARTS; ++uart_num) {
+            downstream_uart = config->_uarts[uart_num];
+            if (downstream_uart) {
+                if (downstream_uart->_passthrough_baud != 0) {
+                    break;
+                }
+            }
+        }
+        if (uart_num == MAX_N_UARTS) {
+            log_error_to(out, "No uart has passthrough_baud configured");
+            return Error::InvalidValue;
+        }
+    } else {
+        // Find a UART device that matches the name
+        for (uart_num = 1; uart_num < MAX_N_UARTS; ++uart_num) {
+            downstream_uart = config->_uarts[uart_num];
+            if (downstream_uart) {
+                if (downstream_uart->name() == value) {
+                    if (downstream_uart->_passthrough_baud == 0) {
+                        log_error_to(out, value << " does not have passthrough_baud configured");
+                        return Error::InvalidValue;
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
+        if (uart_num == MAX_N_UARTS) {
+            log_error_to(out, value << " does not exist");
+            return Error::InvalidValue;
+        }
+    }
+
+    out.pause();  // Stop input polling on the upstream channel
+
+    UartChannel* channel = nullptr;
+    for (size_t n = 0; (channel = config->_uart_channels[n]) != nullptr; ++n) {
+        if (channel->uart_num() == uart_num) {
+            break;
+        }
+        channel = nullptr;  // Leave channel null if not found
+    }
+
+    bool flow;
+    int  xon_threshold;
+    int  xoff_threshold;
+
+    if (channel) {
+        channel->pause();
+    }
+    downstream_uart->enterPassthrough();
+
+    const int buflen = 256;
+    uint8_t   buffer[buflen];
+    size_t    upstream_len;
+    size_t    downstream_len;
+
+    TickType_t last_ticks = xTaskGetTickCount();
+    int        timeout    = 2000;
+
+    while (xTaskGetTickCount() - last_ticks < timeout) {
+        size_t len;
+        len = out.timedReadBytes((char*)buffer, buflen, 10);
+        if (len > 0) {
+            last_ticks = xTaskGetTickCount();
+            downstream_uart->write(buffer, len);
+        }
+        len = downstream_uart->timedReadBytes((char*)buffer, buflen, 10);
+        if (len > 0) {
+            last_ticks = xTaskGetTickCount();
+            out.write(buffer, len);
+        }
+    }
+
+    downstream_uart->exitPassthrough();
+    if (channel) {
+        channel->resume();
+    }
+    out.resume();
     return Error::Ok;
 }
 
@@ -862,6 +954,7 @@ void make_user_commands() {
     new UserCommand("SA", "Alarm/Send", sendAlarm, anyState);
     new UserCommand("Heap", "Heap/Show", showHeap, anyState);
     new UserCommand("SS", "Startup/Show", showStartupLog, anyState);
+    new UserCommand("UP", "Uart/Passthrough", uartPassthrough, notIdleOrAlarm);
 
     new UserCommand("RI", "Report/Interval", setReportInterval, anyState);
 

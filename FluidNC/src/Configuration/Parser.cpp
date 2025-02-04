@@ -196,49 +196,10 @@ namespace Configuration {
         return e->value;  // Terminal value is default.
     }
 
-    // cppcheck-suppress unusedFunction
     void Parser::uartMode(UartData& wordLength, UartParity& parity, UartStop& stopBits) const {
-        auto str = string_util::trim(_token._value);
-        if (str.length() == 5 || str.length() == 3) {
-            int32_t wordLenInt;
-            if (!string_util::is_int(str.substr(0, 1), wordLenInt)) {
-                parseError("Uart mode should be specified as [Bits Parity Stopbits] like [8N1]");
-            } else if (wordLenInt < 5 || wordLenInt > 8) {
-                parseError("Number of data bits for uart is out of range. Expected format like [8N1].");
-            }
-            wordLength = UartData(int(UartData::Bits5) + (wordLenInt - 5));
-
-            switch (str[1]) {
-                case 'N':
-                case 'n':
-                    parity = UartParity::None;
-                    break;
-                case 'O':
-                case 'o':
-                    parity = UartParity::Odd;
-                    break;
-                case 'E':
-                case 'e':
-                    parity = UartParity::Even;
-                    break;
-                default:
-                    parseError("Uart mode should be specified as [Bits Parity Stopbits] like [8N1]");
-                    break;  // Omits compiler warning. Never hit.
-            }
-
-            auto stop = str.substr(2, str.length() - 2);
-            if (stop == "1") {
-                stopBits = UartStop::Bits1;
-            } else if (stop == "1.5") {
-                stopBits = UartStop::Bits1_5;
-            } else if (stop == "2") {
-                stopBits = UartStop::Bits2;
-            } else {
-                parseError("Uart stopbits can only be 1, 1.5 or 2. Syntax is [8N1]");
-            }
-
-        } else {
-            parseError("Uart mode should be specified as [Bits Parity Stopbits] like [8N1]");
+        const char* errstr = decodeUartMode(_token._value, wordLength, parity, stopBits);
+        if (*errstr) {
+            parseError(errstr);
         }
     }
 }

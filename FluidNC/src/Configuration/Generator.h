@@ -6,9 +6,10 @@
 #include <vector>
 #include <sstream>
 
-#include "../Pin.h"
-#include "../Report.h"    // report_gcode_modes()
-#include "../Protocol.h"  // send_line()
+#include "src/Pin.h"
+#include "src/Report.h"    // report_gcode_modes()
+#include "src/Protocol.h"  // send_line()
+#include "src/string_util.h"
 #include "HandlerBase.h"
 
 namespace Configuration {
@@ -104,31 +105,7 @@ namespace Configuration {
         }
 
         void item(const char* name, UartData& wordLength, UartParity& parity, UartStop& stopBits) override {
-            std::string s;
-            s += std::to_string(int(wordLength) - int(UartData::Bits5) + 5);
-            switch (parity) {
-                case UartParity::Even:
-                    s += 'E';
-                    break;
-                case UartParity::Odd:
-                    s += 'O';
-                    break;
-                case UartParity::None:
-                    s += 'N';
-                    break;
-            }
-            switch (stopBits) {
-                case UartStop::Bits1:
-                    s += '1';
-                    break;
-                case UartStop::Bits1_5:
-                    s += "1.5";
-                    break;
-                case UartStop::Bits2:
-                    s += '2';
-                    break;
-            }
-            send_item(name, s);
+            send_item(name, encodeUartMode(wordLength, parity, stopBits));
         }
 
         void item(const char* name, std::string& value, const int minLength, const int maxLength) override { send_item(name, value); }

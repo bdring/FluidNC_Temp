@@ -11,6 +11,22 @@
 #include <string_view>
 #include <algorithm>
 
+Channel::Channel(const std::string& name, bool addCR) : _name(name), _linelen(0), _addCR(addCR) {}
+Channel::Channel(const char* name, bool addCR) : _name(name), _linelen(0), _addCR(addCR) {}
+Channel::Channel(const char* name, int num, bool addCR) : _name(name) {
+    _name += std::to_string(num);
+    _linelen = 0;
+    _addCR   = addCR;
+}
+
+void Channel::pause() {
+    _paused = true;
+}
+
+void Channel::resume() {
+    _paused = false;
+}
+
 void Channel::flushRx() {
     _linelen   = 0;
     _lastWasCR = false;
@@ -190,6 +206,9 @@ void Channel::push(uint8_t byte) {
 }
 
 Error Channel::pollLine(char* line) {
+    if (_paused) {
+        return Error::Ok;
+    }
     handle();
     while (1) {
         int ch = -1;

@@ -11,27 +11,118 @@
 #include <esp_ipc.h>
 #include "hal/uart_hal.h"
 
-Uart::Uart(int uart_num) : _uart_num(uart_num) {}
+std::string encodeUartMode(UartData wordLength, UartParity parity, UartStop stopBits) {
+    std::string s;
+    s += std::to_string(int(wordLength) - int(UartData::Bits5) + 5);
+    switch (parity) {
+        case UartParity::Even:
+            s += 'E';
+            break;
+        case UartParity::Odd:
+            s += 'O';
+            break;
+        case UartParity::None:
+            s += 'N';
+            break;
+    }
+    switch (stopBits) {
+        case UartStop::Bits1:
+            s += '1';
+            break;
+        case UartStop::Bits1_5:
+            s += "1.5";
+            break;
+        case UartStop::Bits2:
+            s += '2';
+            break;
+    }
+    return s;
+}
+
+const char* decodeUartMode(std::string_view str, UartData& wordLength, UartParity& parity, UartStop& stopBits) {
+    str = string_util::trim(str);
+    if (str.length() == 5 || str.length() == 3) {
+        int32_t wordLenInt;
+        if (!string_util::is_int(str.substr(0, 1), wordLenInt)) {
+            return "Uart mode should be specified as [Bits Parity Stopbits] like [8N1]";
+        } else if (wordLenInt < 5 || wordLenInt > 8) {
+            return "Number of data bits for uart is out of range. Expected format like [8N1].";
+        }
+        wordLength = UartData(int(UartData::Bits5) + (wordLenInt - 5));
+
+        switch (str[1]) {
+            case 'N':
+            case 'n':
+                parity = UartParity::None;
+                break;
+            case 'O':
+            case 'o':
+                parity = UartParity::Odd;
+                break;
+            case 'E':
+            case 'e':
+                parity = UartParity::Even;
+                break;
+            default:
+                return "Uart mode should be specified as [Bits Parity Stopbits] like [8N1]";
+                break;  // Omits compiler warning. Never hit.
+        }
+
+        auto stop = str.substr(2, str.length() - 2);
+        if (stop == "1") {
+            stopBits = UartStop::Bits1;
+        } else if (stop == "1.5") {
+            stopBits = UartStop::Bits1_5;
+        } else if (stop == "2") {
+            stopBits = UartStop::Bits2;
+        } else {
+            return "Uart stopbits can only be 1, 1.5 or 2. Syntax is [8N1]";
+        }
+
+    } else {
+        return "Uart mode should be specified as [Bits Parity Stopbits] like [8N1]";
+    }
+    return "";
+}
+
+Uart::Uart(int uart_num) : _uart_num(uart_num), _name("uart") {
+    _name += std::to_string(uart_num);
+}
 
 static void uart_driver_n_install(void* arg) {
     uart_driver_install((uart_port_t)arg, 256, 0, 0, NULL, ESP_INTR_FLAG_IRAM);
 }
 
-// This version is used for the initial console UART where we do not want to change the pins
-void Uart::begin(unsigned long baud, UartData dataBits, UartStop stopBits, UartParity parity) {
-    //    uart_driver_delete(_uart_num);
+void Uart::changeMode(unsigned long baud, UartData dataBits, UartParity parity, UartStop stopBits) {
     uart_config_t conf;
     conf.source_clk          = UART_SCLK_APB;
     conf.baud_rate           = baud;
-    conf.data_bits           = uart_word_length_t(_dataBits);
-    conf.parity              = uart_parity_t(_parity);
-    conf.stop_bits           = uart_stop_bits_t(_stopBits);
+    conf.data_bits           = uart_word_length_t(dataBits);
+    conf.parity              = uart_parity_t(parity);
+    conf.stop_bits           = uart_stop_bits_t(stopBits);
     conf.flow_ctrl           = UART_HW_FLOWCTRL_DISABLE;
     conf.rx_flow_ctrl_thresh = 0;
-    if (uart_param_config(uart_port_t(_uart_num), &conf) != ESP_OK) {
-        // TODO FIXME - should this throw an error?
-        return;
-    };
+    auto ret                 = uart_param_config(uart_port_t(_uart_num), &conf);
+}
+void Uart::restoreMode() {
+    changeMode(_baud, _dataBits, _parity, _stopBits);
+}
+
+void Uart::enterPassthrough() {
+    changeMode(_passthrough_baud, _passthrough_databits, _passthrough_parity, _passthrough_stopbits);
+}
+
+void Uart::exitPassthrough() {
+    restoreMode();
+    if (_sw_flowcontrol_enabled) {
+        setSwFlowControl(_sw_flowcontrol_enabled, _xon_threshold, _xoff_threshold);
+    }
+}
+
+// This version is used for the initial console UART where we do not want to change the pins
+void Uart::begin(unsigned long baud, UartData dataBits, UartStop stopBits, UartParity parity) {
+    //    uart_driver_delete(_uart_num);
+    changeMode(baud, dataBits, parity, stopBits);
 
     // We init UARTs on core 0 so the interrupt handler runs there,
     // thus avoiding conflict with the StepTimer interrupt
@@ -100,7 +191,15 @@ void Uart::setSwFlowControl(bool on, int xon_threshold, int xoff_threshold) {
     if (xoff_threshold <= 0) {
         xoff_threshold = 127;
     }
+    _sw_flowcontrol_enabled = true;
+    _xon_threshold          = xon_threshold;
+    _xoff_threshold         = xoff_threshold;
     uart_set_sw_flow_ctrl(uart_port_t(_uart_num), on, xon_threshold, xoff_threshold);
+}
+void Uart::getSwFlowControl(bool& enabled, int& xon_threshold, int& xoff_threshold) {
+    enabled        = _sw_flowcontrol_enabled;
+    xon_threshold  = _xon_threshold;
+    xoff_threshold = _xoff_threshold;
 }
 bool Uart::setHalfDuplex() {
     return uart_set_mode(uart_port_t(_uart_num), UART_MODE_RS485_HALF_DUPLEX) != ESP_OK;

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <driver/uart.h>
+#include <string>
 
 const int MAX_N_UARTS = UART_NUM_MAX;
 
@@ -22,3 +23,6 @@ enum class UartParity : int {
     Even = UART_PARITY_EVEN,
     Odd  = UART_PARITY_ODD,
 };
+
+const char* decodeUartMode(std::string_view str, UartData& wordLength, UartParity& parity, UartStop& stopBits);
+std::string encodeUartMode(UartData wordLength, UartParity parity, UartStop stopBits);

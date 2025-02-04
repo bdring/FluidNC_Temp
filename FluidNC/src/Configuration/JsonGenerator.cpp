@@ -105,7 +105,11 @@ namespace Configuration {
     void JsonGenerator::item(const char* name, std::vector<float>& value) {}
 
     void JsonGenerator::item(const char* name, UartData& wordLength, UartParity& parity, UartStop& stopBits) {
-        // Not sure if I should comment this out or not. The implementation is similar to the one in Generator.h.
+        enter(name);
+        auto value = encodeUartMode(wordLength, parity, stopBits);
+        _encoder.begin_webui(_currentPath, _currentPath, "S", value.c_str(), 3, 5);
+        _encoder.end_object();
+        leave();
     }
 
     void JsonGenerator::item(const char* name, std::string& value, const int minLength, const int maxLength) {

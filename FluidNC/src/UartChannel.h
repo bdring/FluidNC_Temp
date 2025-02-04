@@ -39,6 +39,8 @@ public:
     size_t timedReadBytes(uint8_t* buffer, size_t length, TickType_t timeout) { return timedReadBytes((char*)buffer, length, timeout); };
     bool   realtimeOkay(char c) override;
     bool   lineComplete(char* line, char c) override;
+    int    uart_num() { return _uart_num; }
+    Uart*  uart() { return _uart; }
 
     void out(const std::string& s, const char* tag) override;
     void out_acked(const std::string& s, const char* tag) override;

@@ -24,6 +24,13 @@ private:
 
     int _uart_num = 0;  // Hardware UART engine number
 
+    bool _sw_flowcontrol_enabled = false;
+    int  _xon_threshold          = 0;
+    int  _xoff_threshold         = 0;
+
+    std::string passthrough_mode = "";
+    std::string _name;
+
 public:
     // These are public so that validators from classes
     // that use Uart can check that the setup is suitable.
@@ -35,17 +42,18 @@ public:
     UartParity _parity   = UartParity::None;
     UartStop   _stopBits = UartStop::Bits1;
 
+    int        _passthrough_baud     = 0;
+    UartData   _passthrough_databits = UartData::Bits8;
+    UartParity _passthrough_parity   = UartParity::Even;
+    UartStop   _passthrough_stopbits = UartStop::Bits1;
+
     Pin _txd_pin;
     Pin _rxd_pin;
     Pin _rts_pin;
     Pin _cts_pin;
 
     // Name is required for the configuration factory to work.
-    const char* name() {
-        static char nstr[6] = "uartN";
-        nstr[4]             = _uart_num - '0';
-        return nstr;
-    }
+    std::string name() { return _name; }
 
     Uart(int uart_num = -1);
     void begin();
@@ -77,6 +85,12 @@ public:
     void forceXoff();
 
     void setSwFlowControl(bool on, int rx_threshold, int tx_threshold);
+    void getSwFlowControl(bool& enabled, int& rx_threshold, int& tx_threshold);
+    void changeMode(unsigned long baud, UartData dataBits, UartParity parity, UartStop stopBits);
+    void restoreMode();
+
+    void enterPassthrough();
+    void exitPassthrough();
 
     // Configuration handlers:
     void validate() override {
@@ -95,6 +109,8 @@ public:
 
         handler.item("baud", _baud, 2400, 10000000);
         handler.item("mode", _dataBits, _parity, _stopBits);
+        handler.item("passthrough_baud", _passthrough_baud, 0, 10000000);  // 0 means not configured
+        handler.item("passthrough_mode", _passthrough_databits, _passthrough_parity, _passthrough_stopbits);
     }
 
     void config_message(const char* prefix, const char* usage);
