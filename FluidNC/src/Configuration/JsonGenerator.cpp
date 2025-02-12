@@ -80,7 +80,7 @@ namespace Configuration {
     void JsonGenerator::item(const char* name, uint32_t& value, const uint32_t minValue, const uint32_t maxValue) {
         enter(name);
         char buf[32];
-        itoa(value, buf, 10);
+        utoa(value, buf, 10);
         _encoder.begin_webui(_currentPath, _currentPath, "I", buf, minValue, maxValue);
         _encoder.end_object();
         leave();

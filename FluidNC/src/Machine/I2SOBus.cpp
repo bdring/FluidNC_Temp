@@ -6,6 +6,8 @@
 #include "Driver/i2s_out.h"  // i2s_out_init()
 
 namespace Machine {
+    const EnumItem pulseUsValues[] = { { 1, "1" }, { 2, "2" }, { 4, "4" }, EnumItem(2) };
+
     void I2SOBus::validate() {
         Assert(_min_pulse_us == 1 || _min_pulse_us == 2 || _min_pulse_us == 4, "min_pulse_us must be 1, 2 or 4");
         if (_bck.defined() || _data.defined() || _ws.defined()) {
@@ -19,7 +21,7 @@ namespace Machine {
         handler.item("bck_pin", _bck);
         handler.item("data_pin", _data);
         handler.item("ws_pin", _ws);
-        handler.item("min_pulse_us", _min_pulse_us);
+        handler.item("min_pulse_us", _min_pulse_us, pulseUsValues);
     }
 
     void I2SOBus::init() {
