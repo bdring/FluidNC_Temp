@@ -5,7 +5,7 @@
 
 #include "../VFDSpindle.h"
 
-#include "../../string_util.h"
+#include "src/string_util.h"
 #include <algorithm>
 
 namespace Spindles {
@@ -18,25 +18,9 @@ namespace Spindles {
             if (pos != std::string_view::npos) {
                 token = input.substr(0, pos);
                 input = input.substr(pos + 1);
-            }
-            else {
+            } else {
                 token = input;
                 input = "";
-            }
-            return true;
-        }
-
-        bool GenericProtocol::from_decimal(std::string_view str, uint32_t& value) {
-            value = 0;
-            if (str.size() == 0) {
-                return false;
-            }
-            while (str.size()) {
-                if (!isdigit(str[0])) {
-                    return false;
-                }
-                value = value * 10 + str[0] - '0';
-                str = str.substr(1);
             }
             return true;
         }
@@ -49,38 +33,34 @@ namespace Spindles {
             if (scale_str[0] == '%') {
                 scale_str.remove_prefix(1);
                 n *= 100;
-                divider *= maxRPM; 
+                divider *= maxRPM;
             }
             if (scale_str[0] == '*') {
                 std::string_view numerator_str;
                 scale_str = scale_str.substr(1);
                 split(scale_str, numerator_str, "/");
                 uint32_t numerator;
-                if (from_decimal(numerator_str, numerator)) {
+                if (string_util::from_decimal(numerator_str, numerator)) {
                     n *= numerator;
-                }
-                else {
+                } else {
                     log_error(spindle->name() << ": bad decimal number " << numerator_str);
                     return;
                 }
                 if (!scale_str.empty()) {
                     uint32_t denominator;
-                    if (from_decimal(scale_str, denominator)) {
-                        divider *= denominator; 
-                    }
-                    else {
+                    if (string_util::from_decimal(scale_str, denominator)) {
+                        divider *= denominator;
+                    } else {
                         log_error(spindle->name() << ": bad decimal number " << scale_str);
                         return;
                     }
                 }
-            }
-            else if (scale_str[0] == '/') {
+            } else if (scale_str[0] == '/') {
                 std::string_view denominator_str(scale_str.substr(1));
                 uint32_t         denominator;
-                if (from_decimal(denominator_str, denominator)) {
+                if (string_util::from_decimal(denominator_str, denominator)) {
                     divider *= denominator;
-                }
-                else {
+                } else {
                     log_error(spindle->name() << ": bad decimal number " << scale_str);
                     return;
                 }
@@ -89,38 +69,9 @@ namespace Spindles {
             n /= divider;
         }
 
-        bool GenericProtocol::from_xdigit(char c, uint8_t& value) {
-            if (isdigit(c)) {
-                value = c - '0';
-                return true;
-            }
-            c = tolower(c);
-            if (c >= 'a' && c <= 'f') {
-                value = 10 + c - 'a';
-                return true;
-            }
-            return false;
-        }
-
-        bool GenericProtocol::from_hex(std::string_view str, uint8_t& value) {
-            value = 0;
-            if (str.size() == 0 || str.size() > 2) {
-                return false;
-            }
-            uint8_t x;
-            while (str.size()) {
-                value <<= 4;
-                if (!from_xdigit(str[0], x)) {
-                    return false;
-                }
-                value += x;
-                str = str.substr(1);
-            }
-            return true;
-        }
         bool GenericProtocol::set_data(std::string_view token, std::basic_string_view<uint8_t>& response_view, const char* name, uint32_t& data) {
             if (string_util::starts_with_ignore_case(token, name)) {
-                uint32_t rval = (response_view[0] << 8) + (response_view[1] & 0xff);
+                uint32_t rval  = (response_view[0] << 8) + (response_view[1] & 0xff);
                 uint32_t orval = rval;
                 scale(rval, token.substr(strlen(name)), 1);
                 data = rval;
@@ -151,8 +102,8 @@ namespace Spindles {
                 }
                 uint32_t ignore;
                 if (set_data(token, response_view, "ignore", ignore)) {
-                    continue; 
-                } 
+                    continue;
+                }
                 if (set_data(token, response_view, "minrpm", instance->_minRPM)) {
                     log_debug(spindle->name() << ": got minRPM " << instance->_minRPM);
                     continue;
@@ -161,7 +112,7 @@ namespace Spindles {
                     log_debug(spindle->name() << ": got maxRPM " << instance->_maxRPM);
                     continue;
                 }
-                if (from_hex(token, val)) {
+                if (string_util::from_hex(token, val)) {
                     if (val != response_view[0]) {
                         log_debug(spindle->name() << ": response mismatch - expected " << to_hex(val) << " got " << to_hex(response_view[0]));
                         return false;
@@ -197,11 +148,9 @@ namespace Spindles {
                     scale(out, token.substr(strlen("rpm")), _maxRPM);
                     data.msg[data.tx_length++] = out >> 8;
                     data.msg[data.tx_length++] = out & 0xff;
-                }
-                else if (from_hex(token, data.msg[data.tx_length])) {
+                } else if (string_util::from_hex(token, data.msg[data.tx_length])) {
                     ++data.tx_length;
-                }
-                else {
+                } else {
                     log_error(spindle->name() << ":Bad hex number " << token);
                     return;
                 }
@@ -217,28 +166,26 @@ namespace Spindles {
                     break;
                 }
                 if (string_util::starts_with_ignore_case(token, "rpm") || string_util::starts_with_ignore_case(token, "minrpm") ||
-                    string_util::starts_with_ignore_case(token, "maxrpm") || string_util::starts_with_ignore_case(token, "ignore")) { 
+                    string_util::starts_with_ignore_case(token, "maxrpm") || string_util::starts_with_ignore_case(token, "ignore")) {
                     data.rx_length += 2;
-                }
-                else if (from_hex(token, x)) {
+                } else if (string_util::from_hex(token, x)) {
                     ++data.rx_length;
-                }
-                else {
+                } else {
                     log_error(spindle->name() << ": bad hex number " << token);
                 }
             }
         }
         void GenericProtocol::direction_command(SpindleState mode, ModbusCommand& data) {
             switch (mode) {
-            case SpindleState::Cw:
-                send_vfd_command(_cw_cmd, data, 0);
-                break;
-            case SpindleState::Ccw:
-                send_vfd_command(_ccw_cmd, data, 0);
-                break;
-            default:  // SpindleState::Disable
-                send_vfd_command(_off_cmd, data, 0);
-                break;
+                case SpindleState::Cw:
+                    send_vfd_command(_cw_cmd, data, 0);
+                    break;
+                case SpindleState::Ccw:
+                    send_vfd_command(_ccw_cmd, data, 0);
+                    break;
+                default:  // SpindleState::Disable
+                    send_vfd_command(_off_cmd, data, 0);
+                    break;
             }
         }
 
@@ -251,7 +198,7 @@ namespace Spindles {
             return [](const uint8_t* response, VFDSpindle* spindle, VFDProtocol* protocol) -> bool {
                 auto instance = static_cast<GenericProtocol*>(protocol);
                 return instance->parser(response, spindle, instance);
-                };
+            };
         }
 
         void GenericProtocol::setup_speeds(VFDSpindle* vfd) {
@@ -261,7 +208,7 @@ namespace Spindles {
         }
         VFDProtocol::response_parser GenericProtocol::initialization_sequence(int index, ModbusCommand& data, VFDSpindle* vfd) {
             // BUG:
-            // 
+            //
             // If we do:
             // _get_min_rpm_cmd = "03 00 0B 00 01 >  03 02 maxrpm*60";
             // _get_max_rpm_cmd = "03 00 05 00 01 >  03 02 maxrpm*60";
@@ -277,19 +224,134 @@ namespace Spindles {
                 return [](const uint8_t* response, VFDSpindle* spindle, VFDProtocol* protocol) -> bool {
                     auto instance = static_cast<GenericProtocol*>(protocol);
                     return instance->parser(response, spindle, instance);
-                    };
+                };
             }
             if (_minRPM == 0xffffffff && !_get_min_rpm_cmd.empty()) {
                 send_vfd_command(_get_min_rpm_cmd, data, 0);
                 return [](const uint8_t* response, VFDSpindle* spindle, VFDProtocol* protocol) -> bool {
                     auto instance = static_cast<GenericProtocol*>(protocol);
                     return instance->parser(response, spindle, instance);
-                    };
+                };
             }
             if (vfd->_speeds.size() == 0) {
                 setup_speeds(vfd);
             }
             return nullptr;
+        }
+
+        struct VFDtype {
+            const char* name;
+            uint32_t    min_rpm;
+            uint32_t    max_rpm;
+            const char* cw_cmd;
+            const char* ccw_cmd;
+            const char* off_cmd;
+            const char* set_rpm_cmd;
+            const char* get_rpm_cmd;
+            const char* get_min_rpm_cmd;
+            const char* get_max_rpm_cmd;
+        } VFDtypes[] = {
+            {
+                "YL620",
+                0xffffffff,
+                0xffffffff,
+                "06 20 00 00 12 > echo",
+                "06 20 00 00 22 > echo",
+                "06 20 00 00 01 > echo",
+                "06 20 01 rpm*10/60 > echo",
+                "03 20 0b 00 01 > 03 02 rpm*6",
+                "",
+                "03 03 08 00 02 > 03 04 minrpm*60/10 maxrpm*6",
+            },
+            {
+                "Huanyang",
+                0xffffffff,
+                0xffffffff,
+                "03 01 01 > echo",
+                "03 01 11 > echo",
+                "03 01 08 > echo",
+                "05 02 rpm*100/60 > echo",
+                "04 03 01 00 00 > 04 03 01 rpm*60/100",
+                "01 03 0b 00 00 > 01 03 0B minRPM*60/100",
+                "01 03 05 00 00 > 01 03 05 maxRPM*60/100",
+            },
+            {
+                "H2A",
+                6000,
+                0xffffffff,
+                "06 20 00 00 01 > echo",
+                "06 20 00 00 02 > echo",
+                "06 20 00 00 06 > echo",
+                "06 10 00 rpm%*100 > echo",
+                "03 70 0C 00 02 > 03 00 04 rpm 00 00",
+                "",
+                "03 B0 05 00 02 >  03 00 04 maxrpm 03 F6",
+            },
+            {
+                "H100",
+                0xffffffff,
+                0xffffffff,
+                "05 00 49 ff 00 > echo",
+                "05 00 4A ff 00 > echo",
+                "05 00 4B ff 00 > echo",
+                "06 02 01 rpm%*4 > echo",
+                "04 00 00 00 02 > 04 04 rpm%*4 ignore",
+                "03 00 0B 00 01 > 03 02 minrpm*60",
+                "03 00 05 00 01 > 03 02 maxrpm*60",
+            },
+            {
+                "NowForever",
+                0xffffffff,
+                0xffffffff,
+                "10 09 00 00 01 02 00 01 > echo",
+                "10 09 00 00 01 02 00 03 > echo",
+                "10 09 00 00 01 02 00 00 > echo",
+                "10 09 01 00 01 02 rpm%*4 > echo",
+                "03 05 02 00 01 > 03 02 rpm%*4",
+                "",
+                "03 00 07 00 02 >  03 04 maxrpm*6 00 00",
+            },
+            {
+                "SiemensV20",
+                0,
+                24000,
+                "06 00 63 0C 7F > echo",
+                "06 00 63 04 7F > echo",
+                "06 00 63 0C 7E > echo",
+                "06 00 64 rpm%*16384/100 > echo",
+                "03 00 6E 00 01 > 03 ignore rpm%*16384/100",
+                "",
+                "",
+            },
+        };
+        void GenericProtocol::afterParse() {
+            for (auto const& vfd : VFDtypes) {
+                if (string_util::equal_ignore_case(_model, vfd.name)) {
+                    log_debug("Using predefined ModbusVFD " << vfd.name);
+                    if (_cw_cmd.empty()) {
+                        _cw_cmd = vfd.cw_cmd;
+                    }
+                    if (_ccw_cmd.empty()) {
+                        _ccw_cmd = vfd.ccw_cmd;
+                    }
+                    if (_off_cmd.empty()) {
+                        _off_cmd = vfd.off_cmd;
+                    }
+                    if (_set_rpm_cmd.empty()) {
+                        _set_rpm_cmd = vfd.set_rpm_cmd;
+                    }
+                    if (_get_rpm_cmd.empty()) {
+                        _get_rpm_cmd = vfd.get_rpm_cmd;
+                    }
+                    if (_get_max_rpm_cmd.empty()) {
+                        _get_max_rpm_cmd = vfd.get_max_rpm_cmd;
+                    }
+                    if (_get_min_rpm_cmd.empty()) {
+                        _get_min_rpm_cmd = vfd.get_min_rpm_cmd;
+                    }
+                    return;
+                }
+            }
         }
 
         // Configuration registration

@@ -62,6 +62,7 @@ namespace Spindles {
 
         // Configuration handlers:
         void validate() override;
+        void afterParse() override;
         void group(Configuration::HandlerBase& handler) override;
 
         virtual ~VFDSpindle() {}

@@ -13,14 +13,10 @@ namespace Spindles {
         class GenericProtocol : public VFDProtocol, Configuration::Configurable {
         private:
             bool split(std::string_view& input, std::string_view& token, const char* delims);
-            bool from_decimal(std::string_view str, uint32_t& value);
             void scale(uint32_t& n, std::string_view scale_str, uint32_t maxRPM);
-            bool from_xdigit(char c, uint8_t& value);
-            bool from_hex(std::string_view str, uint8_t& value);
             bool set_data(std::string_view token, std::basic_string_view<uint8_t>& response_view, const char* name, uint32_t& data);
 
         protected:
-
             void direction_command(SpindleState mode, ModbusCommand& data) override;
             void set_speed_command(uint32_t dev_speed, ModbusCommand& data) override;
 
@@ -42,7 +38,7 @@ namespace Spindles {
 
         private:
             std::string _model;  // VFD Model name
-            uint32_t* _response_data;
+            uint32_t*   _response_data;
             uint32_t    _minRPM = 0xffffffff;
             uint32_t    _maxRPM = 0xffffffff;
 
@@ -54,6 +50,7 @@ namespace Spindles {
             void        setup_speeds(VFDSpindle* vfd);
 
         public:
+            void afterParse() override;
             void group(Configuration::HandlerBase& handler) override {
                 handler.item("model", _model);
                 handler.item("min_RPM", _minRPM, 0xffffffff);

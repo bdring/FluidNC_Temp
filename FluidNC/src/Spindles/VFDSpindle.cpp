@@ -212,6 +212,10 @@ namespace Spindles {
         Assert(_uart != nullptr || _uart_num != -1, "VFD: missing UART configuration");
     }
 
+    void VFDSpindle::afterParse() {
+        detail_->afterParse();
+    }
+
     void VFDSpindle::group(Configuration::HandlerBase& handler) {
         if (handler.handlerType() == Configuration::HandlerType::Generator) {
             if (_uart_num == -1) {

@@ -23,6 +23,7 @@ namespace Spindles {
                 uint8_t msg[VFD_RS485_MAX_MSG_SIZE];
             };
             virtual void group(Configuration::HandlerBase& handler) {};
+            virtual void afterParse() {};
 
         protected:
             // Enable spindown / spinup settings:
